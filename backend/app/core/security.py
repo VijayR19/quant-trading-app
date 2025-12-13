@@ -22,3 +22,9 @@ def create_token(subject: str, token_type: str, expires_delta: timedelta) -> str
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
+def decode_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        return payload
+    except JWTError as e:
+        raise ValueError("Invalid token") from e

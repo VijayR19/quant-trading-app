@@ -18,7 +18,7 @@ def get_db():
         db.close()
 
 
-def get_current_user_id(authorization_header: str = Header(default="")) -> int:
+def get_current_user_id(authorization: str = Header(default="")) -> int:
     """
     Returns the ID of the current user.
 
@@ -26,22 +26,21 @@ def get_current_user_id(authorization_header: str = Header(default="")) -> int:
 
     If the token is missing, invalid, or of an incorrect type, an HTTPException is raised with a status code of 401.
 
-    :param authorization_header: The `Authorization` header containing the bearer token.
+    :param authorization: The `Authorization` header containing the bearer token.
     :return: The ID of the current user.
     :raises HTTPException: If the token is missing, invalid, or of an incorrect type.
     """
-    token = authorization_header.split(" ", 1)[1].strip()
-    if not token.startswith("Bearer "):
+    if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
-    token = token[len("Bearer "):].strip()
-
+    token = authorization.split(" ", 1)[1].strip()
     try:
         payload = decode_token(token)
+    
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid token")
-
-    if payload["type"] != "access":
+    
+    if payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid token type")
-
+    
     return int(payload["sub"])

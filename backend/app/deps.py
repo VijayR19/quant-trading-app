@@ -1,6 +1,6 @@
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
-from app.db import sesssionLocal
+from app.db import SessionLocal
 from app.core.security import decode_token
 
 
@@ -11,7 +11,7 @@ def get_db():
     It will create a new database session if one does not already exist.
     The session will be closed when the endpoint is finished.
     """
-    db = sesssionLocal()
+    db = SessionLocal()
     try:
         yield db
     finally:

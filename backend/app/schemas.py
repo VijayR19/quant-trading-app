@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, EmailStr
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, regex=r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$")
+    password: str = Field(min_length=8)
 
 
 class UserRead(BaseModel):

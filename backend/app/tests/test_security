@@ -1,0 +1,121 @@
+import pytest
+from app.core.security import hash_password
+import bcrypt
+from app.core.security import verify_password
+from passlib.context import CryptContext
+from datetime import timedelta, datetime
+from unittest.mock import patch
+from jose import jwt
+from app.core.security import create_token, decode_token
+from app.core.security import decode_token
+from app.core.config import settings
+
+
+def test_hash_password():
+    # Test that the hashed password is not the same as the original password
+    password = "testpassword"
+    hashed = hash_password(password)
+    assert password != hashed
+
+    # Test that the hashed password is a valid bcrypt hash
+    hashed_bytes = bytes(hashed, 'utf-8')
+    assert bcrypt.checkpw(password.encode('utf-8'), hashed_bytes) == True
+
+    # Test that the hashed password is the same for the same input password
+    password2 = "testpassword"
+    hashed2 = hash_password(password2)
+    assert hashed == hashed2
+
+    # Test that the hashed password is different for different input passwords
+    password3 = "testpassword123"
+    hashed3 = hash_password(password3)
+    assert hashed != hashed3
+
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def test_verify_password_correct():
+    password = "password"
+    hashed = pwd_context.hash(password)
+    assert verify_password(password, hashed)
+
+def test_verify_password_wrong():
+    password = "password"
+    hashed = pwd_context.hash("wrongpassword")
+    assert not verify_password(password, hashed)
+
+def test_verify_password_none():
+    password = None
+    hashed = pwd_context.hash("password")
+    with pytest.raises(TypeError):
+        verify_password(password, hashed)
+
+def test_verify_password_empty():
+    password = ""
+    hashed = pwd_context.hash("password")
+    with pytest.raises(TypeError):
+        verify_password(password, hashed)
+
+def test_verify_password_invalid_hash():
+    password = "password"
+    hashed = "invalid_hash"
+    with pytest.raises(ValueError):
+        verify_password(password, hashed)
+
+def test_create_token():
+    # Test case: valid input
+    subject = "test_user"
+    token_type = "access"
+    expires_delta = timedelta(minutes=15)
+    expected_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWlkcSIsInR5cCI6ImF9IiwiYXVkIjoic2FtbWFuIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyNzUwMjJ9.tyF6Gw6h0gk5r9Kt8BcYU8nYt1uUjZ6XJcYhBbC9jX4"
+    token = create_token(subject, token_type, expires_delta)
+    assert token == expected_token
+
+    # Test case: different token type
+    subject = "test_user"
+    token_type = "refresh"
+    expires_delta = timedelta(days=14)
+    expected_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWlkcSIsInR5cCI6ImF9IiwiYXVkIjoic2FtbWFuIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTY2MTAwMjJ9.1F6Gw6h0gk5r9Kt8BcYU8nYt1uUjZ6XJcYhBbC9jX4"
+    token = create_token(subject, token_type, expires_delta)
+    assert token == expected_token
+
+    # Test case: different expiration time
+    subject = "test_user"
+    token_type = "access"
+    expires_delta = timedelta(minutes=30)
+    expected_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0LWlkcSIsInR5cCI6ImF9IiwiYXVkIjoic2FtbWFuIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyNzUwMjJ9.7F6Gw6h0gk5r9Kt8BcYU8nYt1uUjZ6XJcYhBbC9jX4"
+    token = create_token(subject, token_type, expires_delta)
+    assert token == expected_token
+
+    # Test case: different subject
+    subject = "another_user"
+    token_type = "access"
+    expires_delta = timedelta(minutes=15)
+    expected_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGVuZGFyLWlkcSIsInR5cCI6ImF9IiwiYXVkIjoic2FtbWFuIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyNzUwMjJ9.1F6Gw6h0gk5r9Kt8BcYU8nYt1uUjZ6XJcYhBbC9jX4
+
+
+def test_decode_token_valid_token():
+    # Test that a valid token is decoded correctly
+    token = create_token("test_user", "access", timedelta(minutes=15))
+    payload = decode_token(token)
+    assert payload["sub"] == "test_user"
+    assert payload["type"] == "access"
+    assert isinstance(payload["iat"], int)
+    assert isinstance(payload["exp"], int)
+
+def test_decode_token_invalid_token():
+    # Test that an invalid token raises a ValueError
+    with pytest.raises(ValueError):
+        decode_token("invalid_token")
+
+def test_decode_token_expired_token():
+    # Test that an expired token raises a ValueError
+    token = create_token("test_user", "access", timedelta(seconds=1))
+    with pytest.raises(ValueError):
+        decode_token(token)
+
+def test_decode_token_invalid_algorithm():
+    # Test that an invalid algorithm raises a JWTError
+    token = create_token("test_user", "access", timedelta(minutes=15))
+    with pytest.raises(JWTError):
+        decode_token(token, algorithms=["invalid_algorithm"])

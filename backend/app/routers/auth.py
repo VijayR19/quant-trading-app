@@ -38,7 +38,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenPair)
-def login_credentials(db: Session = Depends(get_db), credentials: LoginRequest):
+def login_credentials(credentials: LoginRequest, db: Session = Depends(get_db)):
     """
     Authenticate a user and return access and refresh tokens.
 

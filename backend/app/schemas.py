@@ -35,3 +35,19 @@ class PredictResponse(BaseModel):
     predicted_price: float
     confidence: float
 
+
+class TradeCreate(BaseModel):
+    symbol: str
+    side: str = Field(pattern="^(BUY|SELL)$")
+    quantity: int = Field(gt=0)
+
+class TradeRead(BaseModel):
+    id: int
+    symbol: str
+    side: str
+    quantity: int
+    price: float
+    status: str
+
+    class Config:
+        from_attributes = True

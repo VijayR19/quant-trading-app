@@ -19,16 +19,16 @@ def seed_initial_users(db: Session) -> None:
 
     initial_users_data = [
 
-        {"email": "test@tradingapp.com", "password": "Test@1234"},
-        {"email": "admin@tradingapp.com", "password": "Admin@1234"},
+        User(email="test@tradingapp.com",  hashed_password="Test@1234"),
+        User(email="admin@tradingapp.com",  hashed_password="Admin@1234"),
     ]
 
     for initial_user_data in initial_users_data:
-        existing_user = db.query(User).filter_by(email=initial_user_data["email"]).first()
+        existing_user = db.query(User).filter_by(email=initial_user_data.email).first()
         if not existing_user:
             user = User(
-                email=initial_user_data["email"],
-                hashed_password=hash_password(initial_user_data["password"])
+                email=initial_user_data.email,
+                hashed_password=hash_password(initial_user_data.hashedpassword)
             )
             db.add(user)
     db.commit()

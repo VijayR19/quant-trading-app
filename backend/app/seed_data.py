@@ -28,7 +28,7 @@ def seed_initial_users(db: Session) -> None:
         if not existing_user:
             user = User(
                 email=initial_user_data.email,
-                hashed_password=hash_password(initial_user_data.hashedpassword)
+                hashed_password=hash_password(initial_user_data.hashed_password),
             )
             db.add(user)
     db.commit()

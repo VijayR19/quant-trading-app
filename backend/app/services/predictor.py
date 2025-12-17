@@ -1,38 +1,33 @@
-import random
-from typing import Tuple
+from typing import Mapping, Any, Tuple
 
-def predict_return(
-    symbol: str, 
-    horizon_minutes: int
-) -> tuple[float, float]:
+
+def predict_return_and_confidence(
+    features: Mapping[str, float],
+    horizon_minutes: int,
+) -> Tuple[float, float]:
     """
-    Predict the return of a stock symbol over a given horizon.
+    Predict the expected return and confidence over a time horizon.
 
-    :param symbol: The stock symbol to predict.
-    :param horizon_minutes: The time horizon for the prediction in minutes.
-    :return: A tuple containing the predicted return and confidence.
-    :rtype: tuple[float, float]
+    Parameters
+    ----------
+    features : dict
+        Feature dictionary derived from market data.
+        Expected keys (optional):
+        - returns_30m
+        - volatility
+    horizon_minutes : int
+        Prediction horizon in minutes.
+
+    Returns
+    -------
+    tuple(float, float)
+        (predicted_return, confidence)
     """
-    # Use symbol and horizon_minutes in prediction logic
-    predicted_return_value = random.uniform(-0.02, 0.02)
-    confidence_value = random.uniform(0.50, 0.85)
-    return predicted_return_value, confidence_value
 
-def predict(features: dict, horizon_minutes: int) -> Tuple[float, float]:
-    # Replace later with real model inference
-    # output: (predicted_return, confidence)
-    # Use horizon_minutes in prediction logic
-    """
-    Predict the return of a stock symbol over a given horizon.
+    returns_30m = features.get("returns_30m", 0.0)
+    volatility = features.get("volatility", 0.3)
 
-    :param features: A dictionary containing the features to use in the prediction.
-    :param horizon_minutes: The time horizon for the prediction in minutes.
-    :return: A tuple containing the predicted return and confidence.
-    :rtype: tuple[float, float]
-    """
-    base = features.get("returns_30m", 0.0)
-    vol = features.get("volatility", 0.3)
-    pred = max(min(base * 0.8, 0.05), -0.05)
-    conf = max(min(0.85 - vol * 0.5, 0.85), 0.50)
-    return float(pred), float(conf)
+    predicted_return = min(max(returns_30m * 0.8, -0.05), 0.05)
+    confidence = min(max(0.85 - volatility * 0.5, 0.50), 0.85)
 
+    return predicted_return, confidence

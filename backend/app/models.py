@@ -15,11 +15,14 @@ class User(Base):
 class Trade(Base):
     __tablename__ = "trades"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    symbol = Column(String, nullable=False, index=True)
-    side = Column(String, nullable=False)  # BUY or SELL
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=False)
+
+    symbol = Column(String(16), index=True, nullable=False)
+    side = Column(String(4), nullable=False)  # "BUY" or "SELL"
     quantity = Column(Integer, nullable=False)
-    price = Column(Numeric(12, 4), nullable=False)
-    status = Column(String, nullable=False, default="FILLED")
+
+    price = Column(Numeric(12, 4), nullable=False)  # executed price
+    status = Column(String(16), nullable=False, default="FILLED")
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

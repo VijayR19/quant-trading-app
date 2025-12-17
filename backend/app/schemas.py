@@ -36,8 +36,10 @@ class PredictResponse(BaseModel):
     confidence: float
 
 
+from pydantic import BaseModel, Field
+
 class TradeCreate(BaseModel):
-    symbol: str
+    symbol: str = Field(min_length=1, max_length=16)
     side: str = Field(pattern="^(BUY|SELL)$")
     quantity: int = Field(gt=0)
 
@@ -51,3 +53,14 @@ class TradeRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PositionRead(BaseModel):
+    symbol: str
+    quantity: int
+
+class PnLRead(BaseModel):
+    symbol: str
+    quantity: int
+    avg_entry: float
+    last_price: float
+    unrealized_pnl: float

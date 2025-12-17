@@ -1,45 +1,152 @@
 from datetime import datetime, timezone
-import random
+import httpx
+from app.core.config import settings
 
-def get_lastest_price(symbol: str) -> dict:
+class MarketDataError(Exception):
+    """Base exception class for market data related errors."""
+    pass
+
+def get_current_utc_time_isoformat() -> str:
+    """Returns the current UTC time in ISO format."""
+    return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
+
+async def get_latest_market_price(symbol: str) -> dict:
     """
-    Returns a dictionary containing the latest price for a given stock symbol.
+    Retrieves the latest market price for a given stock symbol.
 
-    Parameters:
-    symbol (str): The stock symbol to retrieve the latest price for.
-
-    Returns:
-    dict: A dictionary containing the symbol, price, timestamp, and source of the latest price.
+    :param symbol: The stock symbol to retrieve the latest price for.
+    :return: A dictionary containing the symbol, price, timestamp, and market data source.
+    :raises MarketDataError: If the market data provider is not supported.
     """
     symbol = symbol.upper()
+
+    market_provider = getattr(settings, "market_provider", "finnhub")
+
+    if market_provider == "finnhub":
+        return await _finnhub_quote(symbol)
+
+    raise MarketDataError(f"Unsupported market data provider: {market_provider}")
+
+
+async def _finnhub_quote(symbol: str) -> dict:
+    """
+    Retrieves the latest market price for a given stock symbol using Finnhub.
+
+    :param symbol: The stock symbol to retrieve the latest price for.
+    :return: A dictionary containing the symbol, price, timestamp, and market data source.
+    :raises MarketDataError: If the Finnhub API key is not configured or no price data is available.
+    """
+    api_key = getattr(settings, "finnhub_api_key")
+    if not api_key:
+        raise MarketDataError("Finnhub API key is not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            "https://finnhub.io/api/v1/quote",
+            params={"symbol": symbol, "token": api_key},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    price = data.get("c")
+    if price is None or price == 0:
+        raise MarketDataError(f"No price data available for symbol: {symbol}")
+
     return {
         "symbol": symbol,
-        "price": round(random.uniform(50, 250), 2),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "source": "stub"
+        "price": price,
+        "timestamp": get_current_utc_time_isoformat(),
+        "source": "finnhub",
     }
 
-def get_recent_features(symbol: str) -> dict:
-    # Later: compute from bars (returns, vol, RSI, etc.)
+
+async def get_recent_market_features(symbol: str) -> dict:
     """
-    Returns a dictionary containing the most recent features for a given stock symbol.
-
-    Parameters:
-    symbol (str): The stock symbol to retrieve the most recent features for.
-
-    Returns:
-    dict: A dictionary containing the most recent features for the given stock symbol.
-    Features currently include:
-    - return_5m: the return over the past 5 minutes
-    - returns_30m: the return over the past 30 minutes
-    - volatility: the volatility of the stock over the past 30 minutes
-    - volume_z: the volume of the stock over the past 30 minutes, normalized by the mean and standard deviation of the past 30 minutes
+    Fetch recent candles and compute simple features for the predictor.
+    Features returned:
+      - returns_30m
+      - volatility
     """
     symbol = symbol.upper()
+
+    provider = getattr(settings, "market_provider", "finnhub")
+    if provider != "finnhub":
+        raise MarketDataError(f"Unsupported market data provider: {provider}")
+
+    candles = await _finnhub_candles_last_n_minutes(symbol=symbol, minutes=60, resolution="1")
+    closes = candles["closes"]
+
+    if len(closes) < 35:
+        raise MarketDataError(f"Not enough candle data to compute features for {symbol}")
+
+    # last 30 minutes return: (last / value 30m ago) - 1
+    last = closes[-1]
+    prev_30m = closes[-31]
+    returns_30m = (last / prev_30m) - 1.0
+
+    # simple volatility: std dev of 1-min returns over last 30 mins
+    rets = []
+    for i in range(len(closes) - 30, len(closes)):
+        if i == 0:
+            continue
+        r = (closes[i] / closes[i - 1]) - 1.0
+        rets.append(r)
+
+    # compute std without numpy
+    mean = sum(rets) / len(rets)
+    var = sum((x - mean) ** 2 for x in rets) / max(len(rets) - 1, 1)
+    volatility = var ** 0.5
+
     return {
-        "return_5m": random.uniform(-0.01, 0.01),
-        "returns_30m": random.uniform(-0.03, 0.03),
-        "volatility": random.uniform(0.1, 0.6),
-        "volume_z": random.uniform(-2, 2),
+        "symbol": symbol,
+        "returns_30m": float(returns_30m),
+        "volatility": float(volatility),
+        "timestamp": get_current_utc_time_isoformat(),
+        "source": "finnhub",
+        "resolution": "1",
+        "window_minutes": 60,
     }
-    
+
+
+async def _finnhub_candles_last_n_minutes(symbol: str, minutes: int, resolution: str = "1") -> dict:
+    """
+    Finnhub candles endpoint:
+      https://finnhub.io/docs/api/stock-candles
+    resolution: "1", "5", "15", "30", "60", "D", ...
+    """
+    api_key = getattr(settings, "finnhub_api_key")
+    if not api_key:
+        raise MarketDataError("Finnhub API key is not configured")
+
+    # Finnhub expects UNIX seconds
+    now = datetime.now(timezone.utc)
+    to_ts = int(now.timestamp())
+    from_ts = to_ts - (minutes * 60)
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(
+            "https://finnhub.io/api/v1/stock/candle",
+            params={
+                "symbol": symbol,
+                "resolution": resolution,
+                "from": from_ts,
+                "to": to_ts,
+                "token": api_key,
+            },
+        )
+        r.raise_for_status()
+        data = r.json()
+
+    # Finnhub returns {"s":"ok","c":[...], ...} or {"s":"no_data",...}
+    if data.get("s") != "ok":
+        raise MarketDataError(f"No candle data available for symbol: {symbol}")
+
+    closes = data.get("c", [])
+    if not closes:
+        raise MarketDataError(f"No close prices available for symbol: {symbol}")
+
+    return {
+        "symbol": symbol,
+        "closes": [float(x) for x in closes],
+        "raw": data,
+    }

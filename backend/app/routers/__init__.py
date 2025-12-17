@@ -1,1 +1,1 @@
-from . import auth, predict
+from . import auth, market, predict, trade

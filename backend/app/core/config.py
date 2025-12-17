@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     db_port: int = 5432
     db_name: str
 
+    market_provider: str = "finnhub"
+    finnhub_api_key: str | None = None
+
     @property
     def database_url(self) -> str:
         return (
@@ -24,8 +27,7 @@ class Settings(BaseSettings):
             f"{self.db_port}/{self.db_name}"
         )
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env", extra="forbid")
 
 
 settings = Settings()
